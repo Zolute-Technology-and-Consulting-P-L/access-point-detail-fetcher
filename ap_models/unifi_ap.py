@@ -1,29 +1,48 @@
 import requests
+from requests.exceptions import HTTPError
 from .base import APBase
 
 class UniFiAP(APBase):
-    def __init__(self, model, username, password, ip, port, protocol='https'):
+    def __init__(self, model, username, password, ip, port, protocol='https', use_proxy_network=False):
+        """
+        Initialize the UniFiAP class.
+        
+        :param use_proxy_network: Set to True for UDM/UDM-Pro devices that need /proxy/network prefix
+        """
         super().__init__(model, username, password, ip, port, protocol)
         self.base_url = f"{protocol}://{ip}:{port}/"
+        self.use_proxy_network = use_proxy_network
+        # Use /api/auth/login for UDM devices
+        self.login_endpoint = "/api/auth/login" if use_proxy_network else "/api/login"
+        self.api_prefix = "/proxy/network" if use_proxy_network else ""
         self.session = requests.Session()
 
     def connect(self):
-        """Authenticate to the UniFi Controller using the API."""
-        login_url = f"{self.base_url}api/login"
+        """Authenticate to the UniFi Controller using the appropriate API."""
+        # Determine the correct login URL based on the controller type
+        login_url = f"{self.base_url}{self.login_endpoint}"
         credentials = {
             "username": self.username,
-            "password": self.password
+            "password": self.password,
+            "remember": True
         }
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+
         try:
-            response = self.session.post(login_url, json=credentials, verify=False)
-            response.raise_for_status()
+            response = self.session.post(login_url, json=credentials, headers=headers, verify=False)
+            response.raise_for_status()  # Raise exception for HTTP errors
             print("Connected to UniFi Controller.")
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Failed to connect to UniFi Controller: {e}")
+        except HTTPError as http_err:
+            raise Exception(f"Failed to connect to UniFi Controller: {http_err}")
+        except Exception as err:
+            raise Exception(f"An unexpected error occurred: {err}")
 
     def getSSID(self):
-        """Fetch SSIDs from UniFi Controller."""
-        ssid_url = f"{self.base_url}api/s/default/rest/wlanconf"
+        """Fetch SSIDs (WLANs) from UniFi Controller."""
+        ssid_url = f"{self.base_url}{self.api_prefix}/api/s/default/rest/wlanconf"  # 'default' is the site name
         try:
             response = self.session.get(ssid_url, verify=False)
             response.raise_for_status()
@@ -39,7 +58,7 @@ class UniFiAP(APBase):
 
     def gethosts(self, SSID):
         """Fetch connected hosts for a specific SSID."""
-        clients_url = f"{self.base_url}api/s/default/stat/sta"
+        clients_url = f"{self.base_url}{self.api_prefix}/api/s/default/stat/sta"
         try:
             response = self.session.get(clients_url, verify=False)
             response.raise_for_status()
