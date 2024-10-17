@@ -3,7 +3,7 @@ from requests.exceptions import HTTPError
 from .base import APBase
 
 class UniFiAP(APBase):
-    def __init__(self, model, username, password, ip, port, protocol='https', use_proxy_network=False):
+    def __init__(self, model, username, password, ip, port, protocol='https', use_proxy_network=True):
         """
         Initialize the UniFiAP class.
         
