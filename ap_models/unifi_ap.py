@@ -19,7 +19,6 @@ class UniFiAP(APBase):
 
     def connect(self):
         """Authenticate to the UniFi Controller using the appropriate API."""
-        # Determine the correct login URL based on the controller type
         login_url = f"{self.base_url}{self.login_endpoint}"
         credentials = {
             "username": self.username,
@@ -40,32 +39,48 @@ class UniFiAP(APBase):
         except Exception as err:
             raise Exception(f"An unexpected error occurred: {err}")
 
-    def getSSID(self):
-        """Fetch SSIDs (WLANs) from UniFi Controller."""
-        ssid_url = f"{self.base_url}{self.api_prefix}/api/s/default/rest/wlanconf"  # 'default' is the site name
+    def getSites(self):
+        """Fetch the list of sites from the UniFi Controller."""
+        sites_url = f"{self.base_url}{self.api_prefix}/api/self/sites"
+        try:
+            response = self.session.get(sites_url, verify=False)
+            response.raise_for_status()
+            sites = self._parse_sites_output(response.json())
+            return sites
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to get sites: {e}")
+
+    def _parse_sites_output(self, data):
+        """Helper function to parse sites from the API output."""
+        sites = [{ "name": site['name'], "desc": site['desc'] } for site in data['data']]
+        return sites
+
+    def getSSID(self, site):
+        """Fetch SSIDs (WLANs) from a specific site."""
+        ssid_url = f"{self.base_url}{self.api_prefix}/api/s/{site}/rest/wlanconf"
         try:
             response = self.session.get(ssid_url, verify=False)
             response.raise_for_status()
             ssids = self._parse_ssid_output(response.json())
             return ssids
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Failed to get SSIDs: {e}")
+            raise Exception(f"Failed to get SSIDs for site '{site}': {e}")
 
     def _parse_ssid_output(self, data):
         """Helper function to parse SSID from UniFi API output."""
         ssids = [item['name'] for item in data['data']]
         return ssids
 
-    def gethosts(self, SSID):
-        """Fetch connected hosts for a specific SSID."""
-        clients_url = f"{self.base_url}{self.api_prefix}/api/s/default/stat/sta"
+    def gethosts(self, site, SSID):
+        """Fetch connected hosts for a specific SSID on a specific site."""
+        clients_url = f"{self.base_url}{self.api_prefix}/api/s/{site}/stat/sta"
         try:
             response = self.session.get(clients_url, verify=False)
             response.raise_for_status()
             hosts = self._parse_hosts_output(response.json(), SSID)
             return hosts
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Failed to get hosts: {e}")
+            raise Exception(f"Failed to get hosts for SSID '{SSID}' in site '{site}': {e}")
 
     def _parse_hosts_output(self, data, ssid):
         """Helper function to parse hosts from UniFi API output."""
@@ -78,9 +93,13 @@ class UniFiAP(APBase):
         return hosts
 
     def getallHosts(self):
-        """Fetch all connected hosts across all SSIDs."""
-        ssids = self.getSSID()
+        """Fetch all connected hosts across all SSIDs in all sites."""
+        sites = self.getSites()
         all_hosts = {}
-        for ssid in ssids:
-            all_hosts[ssid] = self.gethosts(ssid)
+
+        for site in sites:
+            ssids = self.getSSID(site['name'])
+            for ssid in ssids:
+                all_hosts[f"{site['desc']} - {ssid}"] = self.gethosts(site['name'], ssid)
+
         return all_hosts
