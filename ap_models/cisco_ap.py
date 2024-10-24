@@ -16,9 +16,9 @@ class CiscoAP(APBase):
             )
         elif self.protocol == 'telnet':
             self.connection = telnetlib.Telnet(self.ip, self.port)
-            self.connection.read_until(b"Username: ")
+            self.connection.read_until(b"Username:")
             self.connection.write(self.username.encode('ascii') + b"\n")
-            self.connection.read_until(b"Password: ")
+            self.connection.read_until(b"Password:")
             self.connection.write(self.password.encode('ascii') + b"\n")
         else:
             raise ValueError("Unsupported protocol: use 'ssh' or 'telnet'")
