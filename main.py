@@ -17,24 +17,20 @@ def main():
         ap = ap_manager.create_ap(model, username, password, ip, port, protocol)
 
         # Connect to the AP
-        print(f"Connecting to {model} AP at {ip} via {protocol}...")
+        #print(f"Connecting to {model} AP at {ip} via {protocol}...")
         ap.connect()
-
-        print("\nFetching APs...")
-        aps = ap.getAps()
-        print(aps)
         print(ap.aps_df)
 
-
         # Fetch SSIDs
-        # print("\nFetching SSIDs...")
-        # ssids = ap.getSSID()
-        # print(ap.vap_df)
-        # print(f"SSIDs found: {ssids}")
+        print("\nFetching SSIDs...")
+        ssids = ap.getSSID()
+        print(ap.vap_df)
+        #print(f"SSIDs found: {ssids}")
 
         # # Fetch hosts for each SSID
         # print("\nFetching hosts")
-        # hosts = ap.gethosts()
+        hosts = ap.gethosts()
+        print(ap.hosts_df)
         # print(f"hosts found: {hosts}")
        
 

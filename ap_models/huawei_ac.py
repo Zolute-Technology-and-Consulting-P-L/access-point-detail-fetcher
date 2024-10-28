@@ -11,25 +11,39 @@ class HuaweiAC(APBase):
     vap_df = pd.DataFrame()
 
     def connect(self):
-        """Connect to the Huawei AP via SSH or Telnet."""
-        if self.protocol == 'ssh':
-            self.connection = ConnectHandler(
-                device_type='huawei',
-                ip=self.ip,
-                username=self.username,
-                password=self.password,
-                port=self.port
-            )
-        elif self.protocol == 'telnet':
-            self.connection = telnetlib.Telnet(self.ip, self.port)
-            self.connection.read_until(b"Username:")
-            self.connection.write(self.username.encode('ascii') + b"\n")
-            self.connection.read_until(b"Password:")
-            self.connection.write(self.password.encode('ascii') + b"\n")
-            self.connection.read_until(b">")
-            print("connected")
-        else:
-            raise ValueError("Unsupported protocol: use 'ssh' or 'telnet'")
+        """Connect to the Huawei AP via SSH or Telnet with error handling."""
+        try:
+            if self.protocol == 'ssh':
+                try:
+                    self.connection = ConnectHandler(
+                        device_type='huawei',
+                        ip=self.ip,
+                        username=self.username,
+                        password=self.password,
+                        port=self.port
+                    )
+                except Exception as e:
+                    raise ConnectionError(f"Unexpected error during SSH connection: {e}")
+            elif self.protocol == 'telnet':
+                try:
+                    self.connection = telnetlib.Telnet(self.ip, self.port)
+                    self.connection.read_until(b"Username:")
+                    self.connection.write(self.username.encode('ascii') + b"\n")
+                    self.connection.read_until(b"Password:")
+                    self.connection.write(self.password.encode('ascii') + b"\n")
+                    self.connection.read_until(b">")
+                    print("Connected via Telnet")
+                except Exception as e:
+                    raise ConnectionError(f"Telnet connection failed: {e}")
+            else:
+                raise ValueError("Unsupported protocol: use 'ssh' or 'telnet'")
+        
+        except ConnectionError as ce:
+            print(f"ConnectionError: {ce}")
+            raise  # Re-raise the exception to propagate it further
+        #if connection is scucesful then lets get all ap detail and create ap dataframe.
+
+        self.getAps()
 
     def getSSID(self):
         """Fetch all SSIDs and update the DataFrame; return a list of dictionaries with SSID, ap.mac, and auth_type."""
@@ -109,7 +123,6 @@ class HuaweiAC(APBase):
                     self.connection.write(b" ")
         aps = self._parse_tabular_output(output=output,columns=["ID", "MAC", "Name", "Group", "IP", "Type", "State", "STA", "Uptime", "ExtraInfo"],valid_line_pattern = r"^\d+\s+[\w-]+.+")
         HuaweiAC.aps_df = pd.DataFrame(aps)
-        return [{"mac": ap["MAC"].replace('-', ''), "ip": ap["IP"],"name":ap["Name"]} for ap in aps]
 
     
     def clean_output(self,output):
