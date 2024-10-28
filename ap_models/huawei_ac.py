@@ -41,7 +41,6 @@ class HuaweiAC(APBase):
             while True:
                 # Read a chunk of data
                 chunk = self.connection.read_very_eager().decode('ascii')
-                print(chunk)
                 output += chunk
                 
                 # If the output contains a pattern like <hostname>, it's the end of the output
@@ -50,19 +49,25 @@ class HuaweiAC(APBase):
                 # If the output contains a pagination prompt (e.g., "--More--"), send a space key to continue
                 elif "--More--" in chunk or "---- More ----" in chunk:
                     self.connection.write(b" ")
-        
+        print(output)
         ssids = self._parse_vap_output(output)
         HuaweiAC.vap_df = pd.DataFrame(ssids)
         return [{"SSID": vap["SSID"], "ap.mac": vap["AP MAC"], "auth_type": vap["Auth Type"]} for vap in ssids]
+    
     def _parse_vap_output(self, output):
         """Helper function to parse VAP output into a list of dictionaries with full VAP details."""
-        pattern = r"(\d+)\s+([\w-]+)\s+(\d+)\s+(\d+)\s+([\da-f-]+)\s+(\w+)\s+([\w/-]+)\s+(\d+)\s+(.+)"
+        pattern = r"(\d+)\s+([\w-]+)\s+(\d+)\s+(\d+)\s+([\da-fA-F-]+)\s+(\w+)\s+([\w/-]+)\s+(\d+)\s+(.+)"
         matches = re.findall(pattern, output)
 
         vaps = []
         for match in matches:
             ap_id = match[0]
             ap_mac = self._get_ap_mac(ap_id)  # Retrieve AP MAC from the AP DataFrame
+            
+            # Clean the SSID and Auth Type values
+            ssid = match[8].strip().replace('\r', '')
+            auth_type = match[6].strip()
+            
             vaps.append({
                 "AP ID": ap_id,
                 "AP Name": match[1],
@@ -70,13 +75,14 @@ class HuaweiAC(APBase):
                 "WID": match[3],
                 "BSSID": match[4],
                 "Status": match[5],
-                "Auth Type": match[6],
+                "Auth Type": auth_type,
                 "STA": match[7],
-                "SSID": match[8],
+                "SSID": ssid,
                 "AP MAC": ap_mac
             })
         
         return vaps
+
 
     def _get_ap_mac(self, ap_id):
         """Helper function to get the AP MAC address using the AP ID from the aps_df DataFrame."""
