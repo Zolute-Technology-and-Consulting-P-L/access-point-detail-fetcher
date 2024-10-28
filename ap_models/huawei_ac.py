@@ -26,32 +26,26 @@ class HuaweiAC(APBase):
             self.connection.write(self.username.encode('ascii') + b"\n")
             self.connection.read_until(b"Password:")
             self.connection.write(self.password.encode('ascii') + b"\n")
+            self.connection.read_until(b">")
+            print("connected")
         else:
             raise ValueError("Unsupported protocol: use 'ssh' or 'telnet'")
 
     def getSSID(self):
+        print("getting SSID")
         """Fetch all SSIDs and update the DataFrame; return a list of dictionaries with SSID, ap.mac, and auth_type."""
         if self.protocol == 'ssh':
-            output = self.connection.send_command("display vap all", delay_factor=2)
+            output = self.connection.send_command("display vap all")
         elif self.protocol == 'telnet':
             self.connection.write(b"display vap all\n")
-            output = ''
-            while True:
-                # Read a chunk of data
-                chunk = self.connection.read_very_eager().decode('ascii')
-                output += chunk
-                
-                # If the output contains a pattern like <hostname>, it's the end of the output
-                if re.search(r"<[^>]+>", chunk):
-                    break
-                # If the output contains a pagination prompt (e.g., "--More--"), send a space key to continue
-                elif "--More--" in chunk or "---- More ----" in chunk:
-                    self.connection.write(b" ")
-        print(output)
+            output = self.connection.read_until(b">").decode('ascii')
+            print(output)
+        
         ssids = self._parse_vap_output(output)
+        # Update the class variable with the full DataFrame of VAPs
         HuaweiAC.vap_df = pd.DataFrame(ssids)
+        # Return only an array of dictionaries with 'SSID', 'ap.mac', and 'auth_type'
         return [{"SSID": vap["SSID"], "ap.mac": vap["AP MAC"], "auth_type": vap["Auth Type"]} for vap in ssids]
-
 
     def _parse_vap_output(self, output):
         """Helper function to parse VAP output into a list of dictionaries with full VAP details."""
