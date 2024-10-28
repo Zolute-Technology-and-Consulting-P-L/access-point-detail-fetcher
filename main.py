@@ -26,20 +26,7 @@ def main():
         print(f"SSIDs found: {ssids}")
 
         # Fetch hosts for each SSID
-        for ssid in ssids:
-            print(f"\nFetching hosts for SSID: {ssid}")
-            hosts = ap.gethosts(ssid)
-            print(f"Hosts for SSID '{ssid}':")
-            for host in hosts:
-                print(f"  - MAC: {host['mac_address']}, IP: {host['ip_address']}")
-
-        # Fetch all hosts across all SSIDs
-        print("\nFetching all hosts across all SSIDs...")
-        all_hosts = ap.getallHosts()
-        for ssid, hosts in all_hosts.items():
-            print(f"SSID: {ssid}")
-            for host in hosts:
-                print(f"  - MAC: {host['mac_address']}, IP: {host['ip_address']}")
+       
 
     except ValueError as e:
         print(f"Error: {e}")
