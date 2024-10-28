@@ -167,29 +167,71 @@ class HuaweiAC(APBase):
         return [{"mac": ap["MAC"].replace('-', ''), "ip": ap["IP"],"name":ap["Name"]} for ap in aps]
 
     def _parse_ap_output(self, output):
-        """Helper function to parse AP output into a list of dictionaries with full AP details."""
-        # Adjusted regex pattern to match the structure precisely
-        pattern = r"(\d+)\s+([\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4})\s+([\w-]+)\s+([\w-]+)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|-)\s+(\w+)\s+(\w+)\s+(\d+)\s+(\d+D:\d+H:\d+M:\d+S|-)\s+([^\n\t]+)"
-        matches = re.findall(pattern, output)
+        """
+        Parse the AP output into a list of dictionaries using dynamic column positions based on the header.
+        """
+        cleaned_output = self.clean_output(output)
+        # Split the output into lines
+        lines = cleaned_output.strip().split("\n")
+
+        # Define column names in the order they appear in the header
+        column_names = ["ID", "MAC", "Name", "Group", "IP", "Type", "State", "STA", "Uptime", "ExtraInfo"]
+
+        # Identify the header line
+        header = None
+        header_index = 0
+        for index, line in enumerate(lines):
+            if all(col_name in line for col_name in column_names):
+                header = line
+                header_index = index
+                break
+        
+        # If the header is not found, return an empty list
+        if not header:
+            return []
+
+        # Identify the start positions of each column in the header
+        column_positions = {}
+        for col_name in column_names:
+            col_start = header.find(col_name)
+            if col_start != -1:
+                column_positions[col_name] = col_start
+
+        # Sort the column names by their start positions
+        sorted_columns = sorted(column_positions.items(), key=lambda x: x[1])
+
+        # Determine the column widths
+        column_widths = {}
+        for i, (col_name, start) in enumerate(sorted_columns):
+            end = sorted_columns[i + 1][1] if i + 1 < len(sorted_columns) else len(header)
+            column_widths[col_name] = end - start
+
+        # Regex to identify lines that start with a valid ID and MAC format
+        valid_line_pattern = r"\d+\s+[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}\s+"
 
         aps = []
-        for match in matches:
-            aps.append({
-                "ID": match[0],
-                "MAC": match[1],
-                "Name": match[2],           # Captures the AP ID (e.g., AP-38)
-                "Group": match[3].strip(),  # Captures the name field, including spaces (e.g., Ohbat)
-                "IP": match[4] if match[4] != '-' else None,
-                "Type": match[5],           # The type of AP (e.g., AP4030DN)
-                "State": match[6],          # The state (e.g., nor)
-                "STA": int(match[7]),       # Number of associated clients converted to integer
-                "Uptime": match[8] if match[8] != '-' else None,  # Uptime (e.g., 33D:3H:39M:57S)
-                "ExtraInfo": match[9].strip() if match[9] else None  # Extra info may be empty
-            })
+        for line in lines[header_index + 1:]:
+            # Skip empty lines or lines that don't match the AP record pattern
+            if not re.match(valid_line_pattern, line.strip()):
+                print("invalid line: ",repr(line))
+                continue
+
+            ap_data = {}
+            for i, (col_name, start) in enumerate(sorted_columns):
+                # Determine the end position: start of next column or end of line
+                end = sorted_columns[i + 1][1] if i + 1 < len(sorted_columns) else None
+                value = line[start:end].strip() if end else line[start:].strip()
+                ap_data[col_name] = value if value != '-' else None
+            
+            aps.append(ap_data)
 
         return aps
 
-
-
-
-
+    def clean_output(self,output):
+        # Remove ANSI escape sequences (like '\x1b[42D')
+        output = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', output)
+        # Remove carriage returns and other unwanted control characters
+        output = re.sub(r'[\r\n\t]+', '\n', output)  # Replace multiple line breaks/tabs with a single newline
+        output = re.sub(r'[^\x20-\x7E\n]+', '', output)  # Remove non-printable characters except newline
+        output = re.sub(r'---- More ----', '', output)
+        return output
