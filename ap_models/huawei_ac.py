@@ -35,7 +35,7 @@ class HuaweiAC(APBase):
             output = self.connection.send_command("display vap all")
         elif self.protocol == 'telnet':
             self.connection.write(b"display vap all\n")
-            output = self.connection.read_until(b"#").decode('ascii')
+            output = self.connection.read_until(b"return").decode('ascii')
         
         ssids = self._parse_vap_output(output)
         # Update the class variable with the full DataFrame of VAPs
