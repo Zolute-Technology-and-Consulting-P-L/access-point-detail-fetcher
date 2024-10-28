@@ -87,14 +87,14 @@ class HuaweiAC(APBase):
         # Sort the columns by their start positions
         sorted_columns = sorted(column_positions.items(), key=lambda x: x[1])
 
-        print(column_positions)
+        
         # Determine the column widths
         column_widths = {}
         for i, (col_name, start) in enumerate(sorted_columns):
             end = sorted_columns[i + 1][1] if i + 1 < len(sorted_columns) else len(header)
             column_widths[col_name] = end - start
         
-        print(column_widths)
+        
 
         # Regex to identify lines that start with a valid AP ID pattern (e.g., numeric AP ID and BSSID)
         valid_line_pattern = r"^\d+\s+[\w-]+.+"
@@ -215,36 +215,41 @@ class HuaweiAC(APBase):
         column_names = ["ID", "MAC", "Name", "Group", "IP", "Type", "State", "STA", "Uptime", "ExtraInfo"]
 
         # Identify the header line
+        # Try to locate the header line by checking for the presence of any column names
         header = None
         header_index = 0
         for index, line in enumerate(lines):
-            if all(col_name in line for col_name in column_names):
-                header = line
-                header_index = index
-                break
-        
+                if all(re.search(rf'\b{col_name}\b', line) for col_name in column_names):
+                    print("Detected header:", repr(line))
+                    header = line
+                    header_index = index
+                    break
+
         # If the header is not found, return an empty list
         if not header:
+            print("Header not found in the output.")
             return []
 
-        # Identify the start positions of each column in the header
+        # Identify the exact start positions of each column in the header
         column_positions = {}
         for col_name in column_names:
-            col_start = header.find(col_name)
-            if col_start != -1:
-                column_positions[col_name] = col_start
+            match = re.search(rf'\b{col_name}\b', header)
+            if match:
+                column_positions[col_name] = match.start()
 
-        # Sort the column names by their start positions
+        # Sort the columns by their start positions
         sorted_columns = sorted(column_positions.items(), key=lambda x: x[1])
 
+        
         # Determine the column widths
         column_widths = {}
         for i, (col_name, start) in enumerate(sorted_columns):
             end = sorted_columns[i + 1][1] if i + 1 < len(sorted_columns) else len(header)
             column_widths[col_name] = end - start
+        
 
         # Regex to identify lines that start with a valid ID and MAC format
-        valid_line_pattern = r"\d+\s+[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}\s+"
+        valid_line_pattern = r"^\d+\s+[\w-]+.+"
 
         aps = []
         for line in lines[header_index + 1:]:
