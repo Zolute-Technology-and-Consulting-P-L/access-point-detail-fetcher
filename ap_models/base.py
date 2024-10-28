@@ -20,10 +20,3 @@ class APBase:
         """Fetch all hosts for a specific SSID."""
         raise NotImplementedError("This method should be implemented by subclasses")
 
-    def getallHosts(self):
-        """Fetch all hosts across all SSIDs."""
-        ssids = self.getSSID()
-        all_hosts = {}
-        for ssid in ssids:
-            all_hosts[ssid] = self.gethosts(ssid)
-        return all_hosts

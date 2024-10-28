@@ -20,12 +20,22 @@ def main():
         print(f"Connecting to {model} AP at {ip} via {protocol}...")
         ap.connect()
 
+        print("\nFetching APs...")
+        aps = ap.getAps()
+        print(aps)
+        print(ap.aps_df)
+
+
         # Fetch SSIDs
         print("\nFetching SSIDs...")
         ssids = ap.getSSID()
+        print(ap.vap_df)
         print(f"SSIDs found: {ssids}")
 
         # Fetch hosts for each SSID
+        print("\nFetching hosts")
+        hosts = ap.gethosts()
+        print(f"hosts found: {hosts}")
        
 
     except ValueError as e:

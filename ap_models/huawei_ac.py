@@ -49,38 +49,40 @@ class HuaweiAC(APBase):
                 # If the output contains a pagination prompt (e.g., "--More--"), send a space key to continue
                 elif "--More--" in chunk or "---- More ----" in chunk:
                     self.connection.write(b" ")
-        print(output)
         ssids = self._parse_vap_output(output)
         HuaweiAC.vap_df = pd.DataFrame(ssids)
-        return [{"SSID": vap["SSID"], "ap.mac": vap["AP MAC"], "auth_type": vap["Auth Type"]} for vap in ssids]
+        return [{"SSID": vap["SSID"], "ap_id":vap["AP ID"],"ap_mac": vap["AP MAC"], "auth_type": vap["Auth Type"]} for vap in ssids]
     
     def _parse_vap_output(self, output):
         """Helper function to parse VAP output into a list of dictionaries with full VAP details."""
-        pattern = r"(\d+)\s+([\w-]+)\s+(\d+)\s+(\d+)\s+([\da-fA-F-]+)\s+(\w+)\s+([\w/-]+)\s+(\d+)\s+(.+)"
-        matches = re.findall(pattern, output)
-
+        # Split the output into individual lines
+        lines = output.split("\n")
         vaps = []
-        for match in matches:
-            ap_id = match[0]
-            ap_mac = self._get_ap_mac(ap_id)  # Retrieve AP MAC from the AP DataFrame
-            
-            # Clean the SSID and Auth Type values
-            ssid = match[8].strip().replace('\r', '')
-            auth_type = match[6].strip()
-            
-            vaps.append({
-                "AP ID": ap_id,
-                "AP Name": match[1],
-                "RfID": match[2],
-                "WID": match[3],
-                "BSSID": match[4],
-                "Status": match[5],
-                "Auth Type": auth_type,
-                "STA": match[7],
-                "SSID": ssid,
-                "AP MAC": ap_mac
-            })
+        pattern = r"(\d+)\s+([\w-]+)\s+(\d+)\s+(\d+)\s+([\da-fA-F-]+)\s+(\w+)\s+([\w/-]+)\s+(\d+)\s+(.+)"
         
+        for line in lines:
+            match = re.match(pattern, line.strip())
+            if match:
+                ap_id = match.group(1)
+                ap_mac = self._get_ap_mac(ap_id)  # Retrieve AP MAC from the AP DataFrame
+                
+                # Clean the SSID and Auth Type values
+                ssid = match.group(9).strip().replace('\r', '')
+                auth_type = match.group(7).strip()
+                
+                vaps.append({
+                    "AP ID": ap_id,
+                    "AP Name": match.group(2),
+                    "RfID": match.group(3),
+                    "WID": match.group(4),
+                    "BSSID": match.group(5),
+                    "Status": match.group(6),
+                    "Auth Type": auth_type,
+                    "STA": match.group(8),
+                    "SSID": ssid,
+                    "AP MAC": ap_mac
+                })
+            
         return vaps
 
 
@@ -99,11 +101,22 @@ class HuaweiAC(APBase):
             output = self.connection.send_command("display station all")
         elif self.protocol == 'telnet':
             self.connection.write(b"display station all\n")
-            output = self.connection.read_until(b"#").decode('ascii')
+            output = ''
+            while True:
+                # Read a chunk of data
+                chunk = self.connection.read_very_eager().decode('ascii')
+                output += chunk
+                
+                # If the output contains a pattern like <hostname>, it's the end of the output
+                if re.search(r"<[^>]+>", chunk):
+                    break
+                # If the output contains a pagination prompt (e.g., "--More--"), send a space key to continue
+                elif "--More--" in chunk or "---- More ----" in chunk:
+                    self.connection.write(b" ")
         
         hosts = self._parse_hosts_output(output)
         HuaweiAC.hosts_df = pd.DataFrame(hosts)
-        return [{"mac": host["MAC"], "ip": host["IP"], "ap.mac": host["AP MAC"], "ssid": host["SSID"]} for host in hosts]
+        return [{"mac": host["MAC"], "ip": host["IP"], "ap.mac": host["AP MAC"].replace('-',''), "ssid": host["SSID"]} for host in hosts]
 
     def _parse_hosts_output(self, output):
         """Helper function to parse host output into a list of dictionaries with full host details."""
@@ -137,15 +150,26 @@ class HuaweiAC(APBase):
             output = self.connection.send_command("display ap all")
         elif self.protocol == 'telnet':
             self.connection.write(f"display ap all\n".encode('ascii'))
-            output = self.connection.read_until(b"#").decode('ascii')
-        
+            output = ''
+            while True:
+                # Read a chunk of data
+                chunk = self.connection.read_very_eager().decode('ascii')
+                output += chunk
+                
+                # If the output contains a pattern like <hostname>, it's the end of the output
+                if re.search(r"<[^>]+>", chunk):
+                    break
+                # If the output contains a pagination prompt (e.g., "--More--"), send a space key to continue
+                elif "--More--" in chunk or "---- More ----" in chunk:
+                    self.connection.write(b" ")
         aps = self._parse_ap_output(output)
         HuaweiAC.aps_df = pd.DataFrame(aps)
-        return [{"mac": ap["MAC"], "ip": ap["IP"]} for ap in aps]
+        return [{"mac": ap["MAC"].replace('-', ''), "ip": ap["IP"],"name":ap["Name"]} for ap in aps]
 
     def _parse_ap_output(self, output):
         """Helper function to parse AP output into a list of dictionaries with full AP details."""
-        pattern = r"(\d+)\s+([\da-f-]+)\s+[\w-]+\s+[\w-]+\s+([\d.]+|-)\s+[\w\d]+\s+\w+\s+\d+\s+[\dD:HM\S]+\s+[\w-]+"
+        # Adjusted regex pattern to match the structure precisely
+        pattern = r"(\d+)\s+([\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4})\s+([\w-]+)\s+([\w-]+)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|-)\s+(\w+)\s+(\w+)\s+(\d+)\s+(\d+D:\d+H:\d+M:\d+S|-)\s+([^\n\t]+)"
         matches = re.findall(pattern, output)
 
         aps = []
@@ -153,7 +177,19 @@ class HuaweiAC(APBase):
             aps.append({
                 "ID": match[0],
                 "MAC": match[1],
-                "IP": match[2] if match[2] != '-' else None
+                "Name": match[2],           # Captures the AP ID (e.g., AP-38)
+                "Group": match[3].strip(),  # Captures the name field, including spaces (e.g., Ohbat)
+                "IP": match[4] if match[4] != '-' else None,
+                "Type": match[5],           # The type of AP (e.g., AP4030DN)
+                "State": match[6],          # The state (e.g., nor)
+                "STA": int(match[7]),       # Number of associated clients converted to integer
+                "Uptime": match[8] if match[8] != '-' else None,  # Uptime (e.g., 33D:3H:39M:57S)
+                "ExtraInfo": match[9].strip() if match[9] else None  # Extra info may be empty
             })
-        
+
         return aps
+
+
+
+
+
