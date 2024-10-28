@@ -32,21 +32,16 @@ class HuaweiAC(APBase):
     def getSSID(self):
         """Fetch all SSIDs and update the DataFrame; return a list of dictionaries with SSID, ap.mac, and auth_type."""
         if self.protocol == 'ssh':
-            output = self.connection.send_command("display vap all", delay_factor=2)
+            output = self.connection.send_command("display vap all")
         elif self.protocol == 'telnet':
             self.connection.write(b"display vap all\n")
-            output = ''
-            while True:
-                chunk = self.connection.read_very_eager().decode('ascii')
-                output += chunk
-                # Check if the output contains a prompt indicating the end of the command
-                if "return" in chunk or "Info" in chunk:
-                    break
+            output = self.connection.read_until(b">").decode('ascii')
         
         ssids = self._parse_vap_output(output)
+        # Update the class variable with the full DataFrame of VAPs
         HuaweiAC.vap_df = pd.DataFrame(ssids)
+        # Return only an array of dictionaries with 'SSID', 'ap.mac', and 'auth_type'
         return [{"SSID": vap["SSID"], "ap.mac": vap["AP MAC"], "auth_type": vap["Auth Type"]} for vap in ssids]
-
 
     def _parse_vap_output(self, output):
         """Helper function to parse VAP output into a list of dictionaries with full VAP details."""
