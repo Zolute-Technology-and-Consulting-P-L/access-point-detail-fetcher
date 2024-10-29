@@ -100,7 +100,7 @@ class HuaweiAC(APBase):
         hosts = self._parse_tabular_output(output=output,columns=["STA MAC",          "AP ID", "Ap name",        "Rf/WLAN",  "Band",  "Type",  "Rx/Tx",      "RSSI",  "VLAN",  "IP address",       "SSID"],valid_line_pattern = r"^[\w-]+\s+\d+.+")
         HuaweiAC.hosts_df = pd.DataFrame(hosts)
     
-    def getDiscoveredHosts(self,ap_id):
+    def getDiscoveredSSIDs(self,ap_id):
         """Fetch all hosts and update the DataFrame; return a list of dictionaries with mac, ip, ap.mac, and ssid."""
         command = f"display ap around-ssid-list ap-id {ap_id}"
         if self.protocol == 'ssh':

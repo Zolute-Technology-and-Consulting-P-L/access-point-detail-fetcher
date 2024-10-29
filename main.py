@@ -21,7 +21,7 @@ def main():
         ap.connect()
         print(ap.aps_df)
 
-        ap.getDiscoveredHosts(1)
+        ap.getDiscoveredSSIDs(1)
         print(ap.discovered_ssid_df)
     
        
