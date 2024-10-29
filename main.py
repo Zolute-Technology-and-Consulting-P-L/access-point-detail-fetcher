@@ -21,17 +21,9 @@ def main():
         ap.connect()
         print(ap.aps_df)
 
-        # Fetch SSIDs
-        print("\nFetching SSIDs...")
-        ssids = ap.getSSID()
-        print(ap.vap_df)
-        #print(f"SSIDs found: {ssids}")
-
-        # # Fetch hosts for each SSID
-        # print("\nFetching hosts")
-        hosts = ap.gethosts()
-        print(ap.hosts_df)
-        # print(f"hosts found: {hosts}")
+        ap.getDiscoveredHosts(1)
+        print(ap.discovered_ssid_df)
+    
        
 
     except ValueError as e:

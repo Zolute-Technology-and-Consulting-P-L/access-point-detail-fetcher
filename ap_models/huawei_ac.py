@@ -9,6 +9,7 @@ class HuaweiAC(APBase):
     aps_df = pd.DataFrame()
     hosts_df = pd.DataFrame()
     vap_df = pd.DataFrame()
+    discovered_ssid_df = pd.DataFrame()
 
     def connect(self):
         """Connect to the Huawei AP via SSH or Telnet with error handling."""
@@ -65,7 +66,6 @@ class HuaweiAC(APBase):
                     self.connection.write(b" ")
         ssids = self._parse_tabular_output(output=output,columns=["AP ID", "AP name", "RfID", "WID", "BSSID", "Status", "Auth type", "STA", "SSID"],valid_line_pattern = r"^\d+\s+[\w-]+.+")
         HuaweiAC.vap_df = pd.DataFrame(ssids)
-        return [{"SSID": vap["SSID"], "ap_id":vap["AP ID"], "auth_type": vap["Auth type"]} for vap in ssids]
     
 
 
@@ -99,8 +99,29 @@ class HuaweiAC(APBase):
         
         hosts = self._parse_tabular_output(output=output,columns=["STA MAC",          "AP ID", "Ap name",        "Rf/WLAN",  "Band",  "Type",  "Rx/Tx",      "RSSI",  "VLAN",  "IP address",       "SSID"],valid_line_pattern = r"^[\w-]+\s+\d+.+")
         HuaweiAC.hosts_df = pd.DataFrame(hosts)
-        return [{"mac": host["STA MAC"], "ip": host["IP address"],"ap_id":host["AP ID"], "ssid": host["SSID"]} for host in hosts]
-
+    
+    def getDiscoveredHosts(self,ap_id):
+        """Fetch all hosts and update the DataFrame; return a list of dictionaries with mac, ip, ap.mac, and ssid."""
+        command = f"display ap around-ssid-list ap-id {ap_id}"
+        if self.protocol == 'ssh':
+            output = self.connection.send_command(command)
+        elif self.protocol == 'telnet':
+            self.connection.write(f"{command}\n".encode('ascii'))
+            output = ''
+            while True:
+                # Read a chunk of data
+                chunk = self.connection.read_very_eager().decode('ascii')
+                output += chunk
+                
+                # If the output contains a pattern like <hostname>, it's the end of the output
+                if re.search(r"<[^>]+>", chunk):
+                    break
+                # If the output contains a pagination prompt (e.g., "--More--"), send a space key to continue
+                elif "--More--" in chunk or "---- More ----" in chunk:
+                    self.connection.write(b" ")
+        
+        ssids = self._parse_discovered_ssids(output=output)
+        HuaweiAC.discovered_ssid_df = pd.DataFrame(ssids)
 
 
     def getAps(self):
@@ -199,3 +220,38 @@ class HuaweiAC(APBase):
             aps.append(ap_data)
 
         return aps
+    
+    def _parse_discovered_ssids(self,output):
+        """Parse and return a list of unique SSIDs from the provided output text."""
+        lines = [line.strip() for line in output.splitlines()]  # Clean whitespace from each line
+        ssids = []
+        collecting_ssids = False
+        hyphen_pattern = re.compile(r"^-+$")
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # Check for the three-line pattern to start collecting SSIDs
+            if (
+                hyphen_pattern.match(line) and i + 2 < len(lines) 
+                and lines[i + 1] == "SSID" and hyphen_pattern.match(lines[i + 2])
+            ):
+                collecting_ssids = True
+                i += 3  # Skip the "SSID" and following hyphen line to start collecting actual SSID names
+                continue
+
+            # Stop collecting if another hyphen line appears
+            elif hyphen_pattern.match(line) and collecting_ssids:
+                collecting_ssids = False
+
+            # Collect SSIDs if we are in the SSID section
+            elif collecting_ssids and line:
+                ssids.append(line)
+
+            i += 1
+
+        # Use set to remove duplicates while preserving the original order
+        unique_ssids = list(dict.fromkeys(ssids))
+        ssid_data = [{"SSID": ssid} for ssid in unique_ssids]
+        return ssid_data
